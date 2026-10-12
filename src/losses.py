@@ -44,15 +44,29 @@ def residual_loss(model, collocation_points):
     normalized_x.requires_grad_(True)
 
     # TODO: compute predicted_height. Clamp its value using .clamp(min=1e-3)
-
+    predicted_height = model(normalized_x)
+    predicted_height = predicted_height.clamp(min=1e-3)
     # Step 3: compute the derivatives.
     # TODO: compute height_gradient using torch.autograd. Use grad_outputs=torch.ones_like(something). What value should you use for create_graph and retain_graph ? At the end, add a [0].
-
+    height_gradient = torch.autograd.grad(
+        predicted_height,
+        normalized_x,
+        grad_outputs=torch.ones_like(predicted_height),
+        create_graph=True,
+        retain_graph=True
+    )[0]
     x_scale = input_scale(collocation_points)
     height_gradient = height_gradient / x_scale
 
     # Step 4: build the backwater residual.
-    # TODO: build residual using the Back Water equation
+    # This matches the TP formulation:
+    # h'(x) = -(b'(x) + q^2 / (K_s(x)^2 h(x)^(10/3))) / (1 - q^2 / (g h(x)^3))
+    froude_number = q / (g * predicted_height**3) ** (1 / 2)
+    friction_term = q**2 / (parameter_function**2 * predicted_height ** (10 / 3))
+    residual = height_gradient + (bathymetry_slope + friction_term) / (
+        1 - froude_number**2
+    )
+    
 
     return torch.norm(residual, p=2) ** 2 / number_of_points
 
